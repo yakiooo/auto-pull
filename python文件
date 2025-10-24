@@ -1,0 +1,209 @@
+import tkinter as tk
+from tkinter import messagebox
+import time
+import threading
+from pynput import keyboard
+
+
+class AutoInputApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("自动输入工具")
+        self.root.geometry("800x600")
+        self.root.configure(bg='lightblue')
+
+        self.is_running = False
+        self.is_paused = False
+        self.controller = keyboard.Controller()
+
+        main_frame = tk.Frame(root, bg='lightblue')
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        self.create_widgets(main_frame)
+
+    def create_widgets(self, parent):
+        # 标题
+        title_label = tk.Label(parent, text="自动输入工具",
+                               font=("Microsoft YaHei", 24, "bold"),
+                               bg='lightblue', fg='darkblue')
+        title_label.pack(pady=10)
+
+        # 说明文字
+        instruction = tk.Label(parent,
+                               text="在下面的大框里粘贴文字，然后点击下面的大按钮\n使用pynput库逐字符输入，完美支持中文",
+                               font=("Microsoft YaHei", 14),
+                               bg='lightblue', fg='black')
+        instruction.pack(pady=5)
+
+        # 文本框
+        self.text_area = tk.Text(parent, height=8,
+                                 font=("Microsoft YaHei", 12),
+                                 bg='white', fg='black')
+        self.text_area.pack(fill=tk.BOTH, expand=True, pady=10, padx=20)
+
+        # 控制按钮框架
+        button_frame = tk.Frame(parent, bg='lightblue')
+        button_frame.pack(fill=tk.X, pady=10, padx=20)
+
+        # 提交按钮
+        self.submit_btn = tk.Button(button_frame,
+                                    text="🌟 开始输入 🌟",
+                                    command=self.start_auto_input,
+                                    font=("Microsoft YaHei", 16, "bold"),
+                                    bg="yellow",
+                                    fg="red",
+                                    width=15)
+        self.submit_btn.pack(side=tk.LEFT, padx=10)
+
+        # 暂停/继续按钮
+        self.pause_btn = tk.Button(button_frame,
+                                   text="⏸️ 暂停",
+                                   command=self.toggle_pause,
+                                   font=("Microsoft YaHei", 14, "bold"),
+                                   bg="orange",
+                                   fg="white",
+                                   width=10,
+                                   state=tk.DISABLED)
+        self.pause_btn.pack(side=tk.LEFT, padx=10)
+
+        # 停止按钮
+        self.stop_btn = tk.Button(button_frame,
+                                  text="⏹️ 停止",
+                                  command=self.stop_auto_input,
+                                  font=("Microsoft YaHei", 14, "bold"),
+                                  bg="red",
+                                  fg="white",
+                                  width=10,
+                                  state=tk.DISABLED)
+        self.stop_btn.pack(side=tk.LEFT, padx=10)
+
+        # 输入速度设置
+        speed_frame = tk.Frame(parent, bg='lightblue')
+        speed_frame.pack(fill=tk.X, pady=5, padx=20)
+
+        speed_label = tk.Label(speed_frame, text="输入速度(秒/字符):",
+                               font=("Microsoft YaHei", 12),
+                               bg='lightblue', fg='black')
+        speed_label.pack(side=tk.LEFT)
+
+        self.speed_var = tk.DoubleVar(value=0.05)
+        speed_scale = tk.Scale(speed_frame, from_=0.01, to=0.5, resolution=0.01,
+                               orient=tk.HORIZONTAL, variable=self.speed_var,
+                               length=200, bg='lightblue', font=("Microsoft YaHei", 10))
+        speed_scale.pack(side=tk.LEFT, padx=10)
+
+        # 状态显示
+        self.status_label = tk.Label(parent, text="准备就绪",
+                                     font=("Microsoft YaHei", 14, "bold"),
+                                     bg='lightblue', fg='green')
+        self.status_label.pack(pady=5)
+
+    def start_auto_input(self):
+        text_content = self.text_area.get("1.0", tk.END).strip()
+
+        if not text_content:
+            messagebox.showwarning("提示", "请先在白色大框里输入文字！")
+            return
+
+        # 禁用开始按钮，启用暂停和停止按钮
+        self.submit_btn.config(state=tk.DISABLED, bg='gray')
+        self.pause_btn.config(state=tk.NORMAL)
+        self.stop_btn.config(state=tk.NORMAL)
+
+        self.is_running = True
+        self.is_paused = False
+        self.status_label.config(text="3秒后开始输入，请确保光标在输入位置...", fg='orange')
+
+        thread = threading.Thread(target=self.auto_input_thread, args=(text_content,))
+        thread.daemon = True
+        thread.start()
+
+    def toggle_pause(self):
+        if self.is_paused:
+            # 继续输入
+            self.is_paused = False
+            self.pause_btn.config(text="⏸️ 暂停", bg="orange")
+            self.status_label.config(text="已继续输入...", fg='blue')
+        else:
+            # 暂停输入
+            self.is_paused = True
+            self.pause_btn.config(text="▶️ 继续", bg="green")
+            self.status_label.config(text="已暂停，点击继续按钮恢复...", fg='orange')
+
+    def stop_auto_input(self):
+        self.is_running = False
+        self.is_paused = False
+        self.reset_buttons()
+        self.status_label.config(text="已停止输入", fg='red')
+
+    def reset_buttons(self):
+        """重置按钮状态"""
+        self.submit_btn.config(state=tk.NORMAL, bg='yellow')
+        self.pause_btn.config(state=tk.DISABLED, text="⏸️ 暂停", bg="orange")
+        self.stop_btn.config(state=tk.DISABLED)
+
+    def auto_input_thread(self, text_content):
+        # 3秒倒计时
+        for i in range(3, 0, -1):
+            if not self.is_running:
+                return
+            self.status_label.config(text=f"{i}秒后开始输入...")
+            time.sleep(1)
+
+        if not self.is_running:
+            return
+
+        # 开始输入
+        self.status_label.config(text="正在输入中...", fg='blue')
+
+        try:
+            # 使用pynput逐字符输入（完美支持中文）
+            input_speed = self.speed_var.get()
+
+            for char in text_content:
+                # 检查是否停止
+                if not self.is_running:
+                    break
+
+                # 检查是否暂停
+                while self.is_paused and self.is_running:
+                    time.sleep(0.1)
+
+                if not self.is_running:
+                    break
+
+                # 处理特殊字符
+                if char == '\n':  # 换行符
+                    self.controller.press(keyboard.Key.enter)
+                    self.controller.release(keyboard.Key.enter)
+                elif char == '\t':  # 制表符
+                    self.controller.press(keyboard.Key.tab)
+                    self.controller.release(keyboard.Key.tab)
+                else:
+                    # 输入普通字符（包括中文）
+                    self.controller.type(char)
+
+                # 根据设置的速度等待
+                time.sleep(input_speed)
+
+            if self.is_running:
+                self.status_label.config(text="输入完成！", fg='green')
+
+        except Exception as e:
+            self.status_label.config(text=f"错误: {str(e)}", fg='red')
+
+        # 恢复按钮状态
+        self.root.after(0, self.reset_buttons)
+
+
+# 运行程序
+if __name__ == "__main__":
+    try:
+        from pynput import keyboard
+    except ImportError:
+        print("请先安装依赖: pip install pynput")
+        exit()
+
+    root = tk.Tk()
+    app = AutoInputApp(root)
+    root.mainloop()
